@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>ComfyUI用 ランダムプロンプト生成アプリ</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    h1 { font-size: 1.5em; }
+    .category, .subcategory {
+      display: inline-block;
+      margin: 4px;
+      padding: 10px 16px;
+      border-radius: 5px;
+      background-color: #ccc;
+      color: #000;
+      cursor: pointer;
+      user-select: none;
+    }
+    .active {
+      background-color: #4CAF50;
+      color: white;
+    }
+    .subcategory-container {
+      margin-left: 20px;
+      margin-top: 4px;
+      margin-bottom: 20px;
+    }
+    #generate, #copy {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 8px 14px;
+      background: #eee;
+      border: 1px solid #aaa;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #output {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>ComfyUI用 ランダムプロンプト生成アプリ</h1>
+
+  <div id="categories"></div>
+
+  <div id="output"></div>
+
+  <script>
+    const blacklist = new Set(['hand', 'general', 'finger', 'empty', 'cosmetic_items', 'daily_items', 'entertainment_items', 'fashion_items', 'food_drink', 'performance_items', 'school_items', 'smartphone_gadget', 'fetish', 'isekai', 'daily', 'model_pose_chair_focus', 'model_pose_focus', 'stretch_focus', 'stretch_pose_extreme', 'yoga_focus', 'yoga_wear_focus', 'viral_challenge_focus', 'viral_challenge_future_focus', 'viral_challenge_powerword_focus', 'outdoor', 'private', 'thematic', 'urban']);
+    const structure = {
+      angle: ['back_view', 'front_view', 'low_view', 'top_view', 'side_view', 'tilted_view'],
+      gaze: ['looking_at_viewer', 'looking_away', 'looking_down', 'looking_to_side', 'looking_up'],
+      gesture: ['hand', 'general', 'finger'],
+      pose: ['standing', 'sitting', 'lying', 'angry', 'happy', 'sad', 'sexy'],
+      fetish_pose: ['abs_focus', 'back_focus', 'belly_focus', 'bondage_dom_focus', 'breast_press_focus', 'changing_clothes_focus', 'changing_clothes_focus_extra', 'hip_press_focus', 'injury_focus', 'jealousy_focus', 'lingerie_focus', 'lingerie_focus_extra', 'mouth_focus', 'restraint_bed_focus', 'restraint_focus', 'secret_care_focus', 'secret_care_focus_extra', 'secret_care_focus_final', 'self_washing_focus', 'self_washing_focus_extra', 'tongue_focus', 'underarm_focus'],
+      emotion: ['angry', 'happy', 'sad', 'crying', 'disgusted', 'scared', 'sexy', 'surprised'],
+
+      expression: ['embarrassed', 'serious', 'shy', 'sleepy', 'smug'],
+      open_mouth: ['open_mouth_breathing', 'panting', 'playful_tongue_out', 'seductive_smile', 'shouting', 'small_open', 'smile_with_teeth', 'smirking_with_open_mouth', 'talking', 'wide_open'],
+      closed_mouth: ['blushing_with_closed_mouth', 'closed_smile', 'firm_expression', 'hiding_emotion', 'lips_sealed', 'pouting_closed_mouth', 'shy_closed_mouth', 'slight_smile', 'subtle_grin', 'tight_lips'],
+      eye: ['@ @', '+ +', '= =', 'o o', 'bags under eyes', 'closed eyes', 'empty eyes', 'half-closed eyes', 'heart-shaped pupils', 'jitome', 'looking at phone', 'narrowed eyes', 'one eye closed', 'ringed eyes', 'slit pupils', 'solid circle eyes', 'spiral-only eyes', 'upturned eyes', 'wide-eyed' ],
+
+      prop: ['cosmetic_items', 'daily_items', 'entertainment_items', 'fashion_items', 'food_drink', 'performance_items', 'school_items', 'smartphone_gadget'],
+      hairstyle: ['asymmetric_hair', 'bobcut_hair', 'braid_hair', 'bun_hair', 'curly_hair', 'hime_cut_hair', 'long_hair', 'medium_hair', 'ponytail', 'short_hair', 'side_tail', 'straight_hair', 'twintail'],
+      effect: ['floating_elements', 'glow_effects', 'lines', 'overlays', 'patterns', 'sparkles', 'symbols', 'tears_emphasis'],
+      
+      character: ['amaenbo', 'anegohada', 'imouto', 'oneesan', 'gyaru', 'osananajimi', 'kuudere', 'tsundere', 'yandere', 'ojousama', 'seitokaichou', 'sports_girl', 'sports_girl_cooldown', 'maid_dutiful', 'regression', 'regression_baby'],
+      type: ['doM_type', 'doS_type', 'bold_tease_type', 'horny_anytime', 'inviting_submissive', 'introvert_type', 'jealous_type', 'natural_gentle'],
+      costume: ['animal', 'bunny', 'cheerleader', 'china', 'delivery', 'fetish', 'halloween', 'idol', 'isekai', 'kindergarten', 'lingerie', 'lolita', 'maid', 'mechanic', 'miko', 'ninja', 'nurse', 'pirate', 'police', 'race_queen', 'santa', 'store_clerk', 'teacher', 'train_conductor', 'wafuku', 'wedding'],
+
+      outfit_school: ['blazer', 'sailor'],
+      outfit_casual: ['daily'],
+      outfit_oversized: ['hoodie', 'jacket', 'jersey', 'shirt', 'sweater', 'tshirt', 'uniform_mix'],
+      outfit_sleepwear: ['babydoll', 'camisole', 'loungewear', 'negligee', 'night_bra', 'oversized', 'pajamas'],
+      outfit_gym: ['bloomers', 'fitness', 'sports_shorts', 'tanktop', 'track_suit', 'windbreaker'],
+      outfit_swimsuit: ['bikini', 'exotic', 'frill', 'one_piece', 'school_swimsuit', 'sport', 'wet_transparent'],
+      outfit_summer: ['barely', 'casual', 'offshoulder', 'onepiece', 'resort', 'sporty_summer','transparent'],
+      outfit_winter: ['coat', 'fluffy', 'hoodie_layer', 'jacket', 'knitwear', 'mittens_boots', 'scarf'],
+      outfit_kimono: ['bridal_kimono', 'formal_kimono', 'hakama', 'modified_kimono', 'yukata'],
+
+      sex: ['cowgirl_position', 'doggy_style', 'fellatio', 'missionary_position', 'prone_bone', 'spooning_position', 'upright_straddle'],
+      masturbation: ['masturbation', 'bathroom', 'bed_scene', 'captured', 'chair', 'clothesplay', 'fantasy', 'floor', 'mirror', 'outdoors', 'risky', 'standing', 'toy'],
+      gravure: ['body_line', 'bust_focus', 'complex_pose', 'gravure_lie', 'gravure_look', 'gravure_sit', 'gravure_stand', 'groin_focus', 'hip_focus', 'leg_focus', 'lingerie_focus', 'thigh_focus'],
+      theme_model: ['model_pose_chair_focus', 'model_pose_focus'],
+      theme_stretch: ['stretch_focus', 'stretch_pose_extreme'],
+      theme_yoga: ['yoga_focus', 'yoga_wear_focus'],
+      theme_influencer: ['viral_challenge_focus', 'viral_challenge_future_focus', 'viral_challenge_powerword_focus'],
+      theme_fantasy: ['fantasy_job_items'],
+
+      situ_school: ['blackboard', 'classroom', 'clubroom', 'gymnasium', 'hallway', 'infirmary', 'library', 'rooftop', 'school_gate'],
+      situ_outdoor: ['autumn_path', 'beach', 'cherry_blossom', 'festival_booth', 'fireworks', 'flower_field', 'forest', 'riverbank', 'shrine', 'snow_day'],
+      situ_private: ['bathroom', 'bedroom', 'closet', 'dining_room', 'dressing_room', 'home_stairs', 'kitchen', 'living_room', 'study_desk', 'veranda'],
+      situ_thematic: ['backlit', 'curtain_light', 'dramatic_spotlight', 'glowing_light', 'indoor_shadow', 'night_town', 'paper_sliding_door', 'rainy_window', 'sunrise', 'sunset'],
+      situ_urban: ['arcade', 'bookstore', 'bus_stop', 'cafe', 'convenience_store', 'crosswalk', 'shopping_mall', 'sidewalk', 'street_evening', 'train_station']
+
+    };
+
+    const categoriesDiv = document.getElementById('categories');
+    const outputDiv = document.getElementById('output');
+    const activeCategories = new Set();
+    const activeSubcategories = new Set();
+
+    for (const [category, subcategories] of Object.entries(structure)) {
+      const catBtn = document.createElement('div');
+      catBtn.className = 'category';
+      catBtn.textContent = category;
+
+      // 左クリック → ON/OFF切り替え（選択）＆ 中分類の一括ON（ただしOFF状態は保持）
+catBtn.addEventListener('click', (e) => {
+  const isActive = catBtn.classList.toggle('active');
+  const subDiv = document.getElementById(`sub-${category}`);
+  const subButtons = subDiv.querySelectorAll('.subcategory');
+
+  if (isActive) {
+    activeCategories.add(category);
+    // 大分類がONになったら中分類は全ONに（見た目＆状態ともに）
+    subButtons.forEach(subBtn => {
+      subBtn.classList.add('active');
+      activeSubcategories.add(subBtn.textContent);
+    });
+  } else {
+    activeCategories.delete(category);
+    // 大分類OFFにしても中分類のON/OFFは維持する（非アクティブにしない）
+  }
+});
+
+
+      // 右クリック → 中分類表示切り替え
+      catBtn.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const subDiv = document.getElementById(`sub-${category}`);
+        subDiv.style.display = subDiv.style.display === 'none' ? 'block' : 'none';
+      });
+
+      categoriesDiv.appendChild(catBtn);
+
+      // 中分類表示領域
+      const subContainer = document.createElement('div');
+      subContainer.className = 'subcategory-container';
+      subContainer.id = `sub-${category}`;
+      subContainer.style.display = 'none';
+
+      subcategories.forEach(sub => {
+        const subBtn = document.createElement('div');
+        subBtn.className = 'subcategory';
+        subBtn.textContent = sub;
+        subBtn.dataset.subcategory = sub;
+
+        subBtn.classList.add('subcategory');     // ← 明示的なクラス追加（冗長だけど安全）
+        subBtn.dataset.category = category;      // ← 上位カテゴリ（例："action"）
+        subBtn.dataset.subcategory = sub;        // ← サブカテゴリ（例："walking"）
+
+        subBtn.addEventListener('click', () => {
+          subBtn.classList.toggle('active');
+          if (subBtn.classList.contains('active')) {
+            activeSubcategories.add(sub);
+          } else {
+            activeSubcategories.delete(sub);
+          }
+        });
+
+        subContainer.appendChild(subBtn);
+      });
+
+      categoriesDiv.appendChild(subContainer);
+    }
+
+    // ランダム生成ボタン
+    const generateBtn = document.createElement('div');
+    generateBtn.id = 'generate';
+    generateBtn.textContent = '🎲 ランダム生成';
+    // ランダム生成ボタンのすぐ下に追加する（後でappendChildする）
+    const copyBtn = document.createElement('div');
+    copyBtn.id = 'copy';
+    copyBtn.textContent = '📋 コピー';
+    copyBtn.style.marginLeft = '10px';
+    copyBtn.style.padding = '8px 14px';
+    copyBtn.style.background = '#eee';
+    copyBtn.style.border = '1px solid #aaa';
+    copyBtn.style.borderRadius = '5px';
+    copyBtn.style.cursor = 'pointer';
+
+    generateBtn.addEventListener('click', async () => {
+      if (activeCategories.size === 0 || activeSubcategories.size === 0) {
+        outputDiv.textContent = '⚠️ どれか1つはONにしてください';
+        return;
+      }
+
+      const categoryMap = {};
+for (const [category, subs] of Object.entries(structure)) {
+  if (activeCategories.has(category)) {
+    const activeSubs = subs
+      .filter(sub => activeSubcategories.has(sub)) // ← まずONになってるsubだけ残す
+
+    if (activeSubs.length > 0) {
+      categoryMap[category] = activeSubs;
+    }
+  }
+}
+
+
+      const results = [];
+
+      for (const [_, subs] of Object.entries(categoryMap)) {
+        const chosenSub = subs[Math.floor(Math.random() * subs.length)];
+        try {
+          const data = await fetch(`prompt_samples/${findFolder(chosenSub)}/${chosenSub}.json`).then(r => r.json());
+          const prompt = data[Math.floor(Math.random() * data.length)];
+          let label = blacklist.has(chosenSub) ? '' : `${chosenSub}, `;
+          results.push(`${label}${prompt}`);
+        } catch (e) {
+          results.push(`${chosenSub}, [読み込みエラー]`);
+        }
+      }
+
+      outputDiv.textContent = results.join(', ');
+    });
+    
+    // 📋 コピー用ボタンのクリック処理（追記②）
+copyBtn.addEventListener('click', () => {
+  const text = outputDiv.textContent;
+  if (!text.trim()) {
+    alert('コピーする内容がありません');
+    return;
+  }
+  navigator.clipboard.writeText(text)
+    .then(() => {
+      copyBtn.textContent = '✅ コピー成功！';
+      setTimeout(() => copyBtn.textContent = '📋 コピー', 1500);
+    })
+    .catch(() => {
+      alert('コピーに失敗しました');
+    });
+});
+
+
+    const buttonWrapper = document.createElement('div');
+    buttonWrapper.style.marginTop = '10px';
+    buttonWrapper.style.display = 'flex';
+    buttonWrapper.style.gap = '10px';
+
+    buttonWrapper.appendChild(generateBtn);
+    buttonWrapper.appendChild(copyBtn);
+    categoriesDiv.appendChild(buttonWrapper);
+
+
+    function findFolder(subname) {
+  if (structure.angle.includes(subname)) return 'angle';
+  if (structure.gaze.includes(subname)) return 'gaze';
+  if (structure.gesture.includes(subname)) return 'gesture';
+  if (structure.pose.includes(subname)) return 'pose';
+  if (structure.fetish_pose.includes(subname)) return 'fetish_pose';
+  if (structure.emotion.includes(subname)) return 'emotion';
+  if (structure.expression.includes(subname)) return 'expression';
+  if (structure.open_mouth.includes(subname)) return 'open_mouth';
+  if (structure.closed_mouth.includes(subname)) return 'closed_mouth';
+  if (structure.eye.includes(subname)) return 'eye';
+  if (structure.prop.includes(subname)) return 'prop';
+  if (structure.hairstyle.includes(subname)) return 'hairstyle';
+  if (structure.effect.includes(subname)) return 'effect';
+  if (structure.character.includes(subname)) return 'character';
+  if (structure.costume.includes(subname)) return 'costume';
+  if (structure.outfit_school.includes(subname)) return 'outfit_school';
+  if (structure.outfit_casual.includes(subname)) return 'outfit_casual';
+  if (structure.outfit_oversized.includes(subname)) return 'outfit_oversized';
+  if (structure.outfit_sleepwear.includes(subname)) return 'outfit_sleepwear';
+  if (structure.outfit_gym.includes(subname)) return 'outfit_gym';
+  if (structure.outfit_swimsuit.includes(subname)) return 'outfit_swimsuit';
+  if (structure.outfit_summer.includes(subname)) return 'outfit_summer';
+  if (structure.outfit_winter.includes(subname)) return 'outfit_winter';
+  if (structure.outfit_kimono.includes(subname)) return 'outfit_kimono';
+  if (structure.sex.includes(subname)) return 'sex';
+  if (structure.masturbation.includes(subname)) return 'masturbation';
+  if (structure.gravure.includes(subname)) return 'gravure';
+  if (structure.theme_model.includes(subname)) return 'theme_model';
+  if (structure.theme_stretch.includes(subname)) return 'theme_stretch';
+  if (structure.theme_yoga.includes(subname)) return 'theme_yoga';
+  if (structure.theme_influencer.includes(subname)) return 'theme_influencer';
+  if (structure.theme_fantasy.includes(subname)) return 'theme_fantasy';
+  if (structure.situ_school.includes(subname)) return 'situ_school';
+  if (structure.situ_outdoor.includes(subname)) return 'situ_outdoor';
+  if (structure.situ_private.includes(subname)) return 'situ_private';
+  if (structure.situ_thematic.includes(subname)) return 'situ_thematic';
+  if (structure.situ_urban.includes(subname)) return 'situ_urban';
+
+  return '';
+}
+
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+  document.body.addEventListener('contextmenu', function (e) {
+    const target = e.target;
+    if (target.classList.contains('subcategory')) {
+      e.preventDefault();
+
+      const category = target.dataset.category;
+      const subcategory = target.dataset.subcategory;
+      if (!category || !subcategory) return;
+
+      fetch(`prompt_samples/${category}/${subcategory}.json`)
+        .then(response => {
+          if (!response.ok) throw new Error('404 Not Found');
+          return response.json();
+        })
+        .then(data => {
+          const content = data.join('\n');
+          alert(content);
+        })
+        .catch(error => {
+          alert('読み込み失敗: ' + error.message);
+        });
+    }
+  });
+});
+
+  </script>
+  
+</body>
+</html>
